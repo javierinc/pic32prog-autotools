@@ -704,10 +704,10 @@ static void mpsse_load_executive(adapter_t *adapter,
 
     /* Download the PE loader. */
     int i;
-    for (i=0; i<PIC32_PE_LOADER_LEN; i+=2) {
+    for (i=0; i<PIC32_PE_LOADER_MX_MZ_LEN; i+=2) {
         /* Step 5. */
-        unsigned opcode1 = 0x3c060000 | pic32_pe_loader[i];
-        unsigned opcode2 = 0x34c60000 | pic32_pe_loader[i+1];
+        unsigned opcode1 = 0x3c060000 | pic32_pe_loader_mx_mz[i];
+        unsigned opcode2 = 0x34c60000 | pic32_pe_loader_mx_mz[i+1];
 
         xfer_instruction(a, opcode1);       // lui a2, PE_loader_hi++
         xfer_instruction(a, opcode2);       // ori a2, PE_loader_lo++

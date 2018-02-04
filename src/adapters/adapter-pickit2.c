@@ -156,9 +156,11 @@ static void serial_execution(pickit_adapter_t *a)
 /*
  * Download programming executive (PE).
  */
+ 
 static void pickit_load_executive(adapter_t *adapter,
-    const unsigned *pe, unsigned nwords, unsigned pe_version)
-{
+                                  const unsigned *pe, unsigned nwords,
+                                  unsigned pe_version) {
+                                      
     pickit_adapter_t *a = (pickit_adapter_t*) adapter;
 
     //fprintf(stderr, "%s: load_executive\n", a->name);
@@ -170,131 +172,289 @@ static void pickit_load_executive(adapter_t *adapter,
                           (unsigned char) ((w) >> 16), \
                           (unsigned char) ((w) >> 24)
 
-    if (debug_level > 0)
+    if (debug_level > 0) {
         fprintf(stderr, "%s: download PE loader\n", a->name);
-    pickit_send(a, 45, CMD_CLEAR_DOWNLOAD_BUFFER,
-        CMD_DOWNLOAD_DATA, 28,          //----------------- step 1
-            WORD_AS_BYTES(0x3c04bf88),  // lui a0, 0xbf88
-            WORD_AS_BYTES(0x34842000),  // ori a0, 0x2000 - address of BMXCON
-            WORD_AS_BYTES(0x3c05001f),  // lui a1, 0x1f
-            WORD_AS_BYTES(0x34a50040),  // ori a1, 0x40   - a1 has 001f0040
-            WORD_AS_BYTES(0xac850000),  // sw  a1, 0(a0)  - BMXCON initialized
-                                        //----------------- step 2
-            WORD_AS_BYTES(0x34050800),  // li  a1, 0x800  - a1 has 00000800
-            WORD_AS_BYTES(0xac850010),  // sw  a1, 16(a0) - BMXDKPBA initialized
-        CMD_EXECUTE_SCRIPT, 12,         //----------------- execute
-            SCRIPT_JT2_SENDCMD, TAP_SW_ETAP,
-            SCRIPT_JT2_SETMODE, 6, 0x1F,
-            SCRIPT_JT2_XFERINST_BUF,
-            SCRIPT_JT2_XFERINST_BUF,
-            SCRIPT_JT2_XFERINST_BUF,
-            SCRIPT_JT2_XFERINST_BUF,
-            SCRIPT_JT2_XFERINST_BUF,
-            SCRIPT_JT2_XFERINST_BUF,
-            SCRIPT_JT2_XFERINST_BUF);
-    check_timeout(a, "step1");
+    }
+    
+    if (pe_version == 0x510) {
+        
+        pickit_send(a, 3 + 4 + 4 + 2 + 2 + 3 + 2, 
+                    CMD_CLEAR_DOWNLOAD_BUFFER,
+                    CMD_DOWNLOAD_DATA,
+                    8,
+                
+                    // timijk Step 1. Setup the PIC32MM RAM A000.0200
+                    WORD_AS_BYTES(0xA00041A4),
+                    WORD_AS_BYTES(0x02005084),
+                
+                    // execute
+                    CMD_EXECUTE_SCRIPT, 7,
+                    SCRIPT_JT2_SENDCMD, TAP_SW_ETAP,
+                    SCRIPT_JT2_SETMODE, 6, 0x1F,
+                    SCRIPT_JT2_XFERINST_BUF,
+                    SCRIPT_JT2_XFERINST_BUF);
+                
+        check_timeout(a, "step 1");
+    
+        // Download the PE loader
+        int i;
+        for (i=0; i<PIC32_PE_LOADER_MM_LEN; i+=2) {
+            
+            pickit_send(a, 3 + 4 + 4 + 4 + 2 + 3,
+                       CMD_CLEAR_DOWNLOAD_BUFFER,
+                       CMD_DOWNLOAD_DATA, 
+                       12,
+                       
+                       //lui a2, <PE_loader hi++>
+                       WORD_AS_BYTES(((pic32_pe_loader_mm[i] << 16) | 0x000041A6)),
+                       // ori a2, a2, <PE_loader lo++>
+                       WORD_AS_BYTES(((pic32_pe_loader_mm[i] << 16) | 0x000050C6)),
+                       
+                       // sw    a2, 0(a0)
+                       // addiu a0, a0, 4
+                       WORD_AS_BYTES(0x6E42EB40),
 
-    pickit_send(a, 30, CMD_CLEAR_DOWNLOAD_BUFFER,
-        CMD_DOWNLOAD_DATA, 20,          //----------------- step 3
-            WORD_AS_BYTES(0x8c850040),  // lw  a1, 64(a0) - load BMXDMSZ
-            WORD_AS_BYTES(0xac850020),  // sw  a1, 32(a0) - BMXDUDBA initialized
-            WORD_AS_BYTES(0xac850030),  // sw  a1, 48(a0) - BMXDUPBA initialized
-                                        //----------------- step 4
-            WORD_AS_BYTES(0x3c04a000),  // lui a0, 0xa000
-            WORD_AS_BYTES(0x34840800),  // ori a0, 0x800  - a0 has a0000800
-        CMD_EXECUTE_SCRIPT, 5,          //----------------- execute
-            SCRIPT_JT2_XFERINST_BUF,
-            SCRIPT_JT2_XFERINST_BUF,
-            SCRIPT_JT2_XFERINST_BUF,
-            SCRIPT_JT2_XFERINST_BUF,
-            SCRIPT_JT2_XFERINST_BUF);
-    check_timeout(a, "step3");
-
-    // Download the PE loader
-    int i;
-    for (i=0; i<PIC32_PE_LOADER_LEN; i+=2) {
-        pickit_send(a, 25, CMD_CLEAR_DOWNLOAD_BUFFER,
-            CMD_DOWNLOAD_DATA, 16,          //------------- step 5
-                WORD_AS_BYTES((0x3c060000   // lui a2, PE_loader_hi++
-                    | pic32_pe_loader[i])),
-                WORD_AS_BYTES((0x34c60000   // ori a2, PE_loader_lo++
-                    | pic32_pe_loader[i+1])),
-                WORD_AS_BYTES(0xac860000),  // sw  a2, 0(a0)
-                WORD_AS_BYTES(0x24840004),  // addiu a0, 4
-            CMD_EXECUTE_SCRIPT, 4,          //------------- execute
+                       CMD_EXECUTE_SCRIPT, 3,
+                       SCRIPT_JT2_XFERINST_BUF,
+                       SCRIPT_JT2_XFERINST_BUF,
+                       SCRIPT_JT2_XFERINST_BUF);
+                       
+            check_timeout(a, "step 2");
+            
+        }
+        
+        // Jump to PE loader
+        pickit_send(a, 3 + (4*5) + 7 + 2 + 3 + 2 + 6 +4, 
+                    CMD_CLEAR_DOWNLOAD_BUFFER,
+                    CMD_DOWNLOAD_DATA, 
+                    20,
+                    
+                    WORD_AS_BYTES(0xa00041b9),
+                    WORD_AS_BYTES(0x02015339),
+                    WORD_AS_BYTES(0x0c004599),
+                    WORD_AS_BYTES(0x0c000c00),
+                    WORD_AS_BYTES(0x0c000c00),
+                    
+                    CMD_EXECUTE_SCRIPT, 
+                    5 + 17,
+                    SCRIPT_JT2_XFERINST_BUF,
+                    SCRIPT_JT2_XFERINST_BUF,
+                    SCRIPT_JT2_XFERINST_BUF,
+                    SCRIPT_JT2_XFERINST_BUF,
+                    SCRIPT_JT2_XFERINST_BUF,
+                    
+                    SCRIPT_JT2_SENDCMD, TAP_SW_ETAP,
+                    SCRIPT_JT2_SETMODE, 6, 0x1F,
+                    SCRIPT_JT2_SENDCMD, ETAP_FASTDATA,
+                    
+                    SCRIPT_JT2_XFRFASTDAT_LIT,
+                    0, 3, 0, 0xA0,                  // PE_ADDRESS = 0xA000_0300
+                    SCRIPT_JT2_XFRFASTDAT_LIT,
+                    
+                    (unsigned char) nwords,         // PE_SIZE
+                    (unsigned char) (nwords >> 8),
+                    0, 0);
+                     
+        check_timeout(a, "step 3-4a");
+        
+        // Download the PE itself 
+        if (debug_level > 0) {
+            fprintf(stderr, "%s: download PE code\n", a->name);
+        }
+      
+        // +9 to guarantee that we are going to send all bytes.
+        // Keep in mind that we have to append 9 extra bytes to pe_loader array
+        // in file pic32.c
+            
+        int nloops = (nwords + 9) / 10;
+        
+        for (i=0; i<nloops; i++, pe+=10) {          // download 10 words at a time
+            
+            pickit_send(a, 3 + (4*10) + 2 + 10,
+                    CMD_CLEAR_DOWNLOAD_BUFFER,
+                    CMD_DOWNLOAD_DATA,
+                    40,
+                    
+                    // download the PE instructions
+                    WORD_AS_BYTES(pe[0]),
+                    WORD_AS_BYTES(pe[1]),
+                    WORD_AS_BYTES(pe[2]),
+                    WORD_AS_BYTES(pe[3]),
+                    WORD_AS_BYTES(pe[4]),
+                    WORD_AS_BYTES(pe[5]),
+                    WORD_AS_BYTES(pe[6]),
+                    WORD_AS_BYTES(pe[7]),
+                    WORD_AS_BYTES(pe[8]),
+                    WORD_AS_BYTES(pe[9]),
+                    
+                    // execute
+                    CMD_EXECUTE_SCRIPT,
+                    10,
+                    
+                    SCRIPT_JT2_XFRFASTDAT_BUF,
+                    SCRIPT_JT2_XFRFASTDAT_BUF,
+                    SCRIPT_JT2_XFRFASTDAT_BUF,
+                    SCRIPT_JT2_XFRFASTDAT_BUF,
+                    SCRIPT_JT2_XFRFASTDAT_BUF,
+                    SCRIPT_JT2_XFRFASTDAT_BUF,
+                    SCRIPT_JT2_XFRFASTDAT_BUF,
+                    SCRIPT_JT2_XFRFASTDAT_BUF,
+                    SCRIPT_JT2_XFRFASTDAT_BUF,
+                    SCRIPT_JT2_XFRFASTDAT_BUF);
+                    
+            check_timeout(a, "step 4b");
+        }
+        
+        mdelay(100);
+        
+        // Jump to the PE
+        pickit_send(a, 3 + 8 + 2 +  2,
+            CMD_CLEAR_DOWNLOAD_BUFFER,
+            CMD_DOWNLOAD_DATA, 
+            8,
+            
+            WORD_AS_BYTES(0x00000000),
+            WORD_AS_BYTES(0xDEAD0000),
+            
+            CMD_EXECUTE_SCRIPT, 
+            2,
+            
+            // execute
+            SCRIPT_JT2_XFRFASTDAT_BUF,
+            SCRIPT_JT2_XFRFASTDAT_BUF);
+            
+        check_timeout(a, "step 5");
+        mdelay(100);
+    
+    }
+    
+    else {
+        
+        pickit_send(a, 45, CMD_CLEAR_DOWNLOAD_BUFFER,
+            CMD_DOWNLOAD_DATA, 28,          //----------------- step 1
+                WORD_AS_BYTES(0x3c04bf88),  // lui a0, 0xbf88
+                WORD_AS_BYTES(0x34842000),  // ori a0, 0x2000 - address of BMXCON
+                WORD_AS_BYTES(0x3c05001f),  // lui a1, 0x1f
+                WORD_AS_BYTES(0x34a50040),  // ori a1, 0x40   - a1 has 001f0040
+                WORD_AS_BYTES(0xac850000),  // sw  a1, 0(a0)  - BMXCON initialized
+                                            //----------------- step 2
+                WORD_AS_BYTES(0x34050800),  // li  a1, 0x800  - a1 has 00000800
+                WORD_AS_BYTES(0xac850010),  // sw  a1, 16(a0) - BMXDKPBA initialized
+            CMD_EXECUTE_SCRIPT, 12,         //----------------- execute
+                SCRIPT_JT2_SENDCMD, TAP_SW_ETAP,
+                SCRIPT_JT2_SETMODE, 6, 0x1F,
+                SCRIPT_JT2_XFERINST_BUF,
+                SCRIPT_JT2_XFERINST_BUF,
+                SCRIPT_JT2_XFERINST_BUF,
                 SCRIPT_JT2_XFERINST_BUF,
                 SCRIPT_JT2_XFERINST_BUF,
                 SCRIPT_JT2_XFERINST_BUF,
                 SCRIPT_JT2_XFERINST_BUF);
-        check_timeout(a, "step5");
-    }
+        check_timeout(a, "step1");
 
-    // Jump to PE loader
-    pickit_send(a, 42, CMD_CLEAR_DOWNLOAD_BUFFER,
-        CMD_DOWNLOAD_DATA, 16,          //----------------- step 6
-            WORD_AS_BYTES(0x3c19a000),  // lui t9, 0xa000
-            WORD_AS_BYTES(0x37390800),  // ori t9, 0x800  - t9 has a0000800
-            WORD_AS_BYTES(0x03200008),  // jr  t9
-            WORD_AS_BYTES(0x00000000),  // nop
-        CMD_EXECUTE_SCRIPT, 21,         //----------------- execute
-            SCRIPT_JT2_XFERINST_BUF,
-            SCRIPT_JT2_XFERINST_BUF,
-            SCRIPT_JT2_XFERINST_BUF,
-            SCRIPT_JT2_XFERINST_BUF,
-            SCRIPT_JT2_SENDCMD, TAP_SW_ETAP,
-            SCRIPT_JT2_SETMODE, 6, 0x1F,
-            SCRIPT_JT2_SENDCMD, ETAP_FASTDATA,
-            SCRIPT_JT2_XFRFASTDAT_LIT,
-                0, 9, 0, 0xA0,                  // PE_ADDRESS = 0xA000_0900
-            SCRIPT_JT2_XFRFASTDAT_LIT,
-                (unsigned char) nwords,         // PE_SIZE
-                (unsigned char) (nwords >> 8),
-                0, 0);
-    check_timeout(a, "step6");
+        pickit_send(a, 30, CMD_CLEAR_DOWNLOAD_BUFFER,
+            CMD_DOWNLOAD_DATA, 20,          //----------------- step 3
+                WORD_AS_BYTES(0x8c850040),  // lw  a1, 64(a0) - load BMXDMSZ
+                WORD_AS_BYTES(0xac850020),  // sw  a1, 32(a0) - BMXDUDBA initialized
+                WORD_AS_BYTES(0xac850030),  // sw  a1, 48(a0) - BMXDUPBA initialized
+                                            //----------------- step 4
+                WORD_AS_BYTES(0x3c04a000),  // lui a0, 0xa000
+                WORD_AS_BYTES(0x34840800),  // ori a0, 0x800  - a0 has a0000800
+            CMD_EXECUTE_SCRIPT, 5,          //----------------- execute
+                SCRIPT_JT2_XFERINST_BUF,
+                SCRIPT_JT2_XFERINST_BUF,
+                SCRIPT_JT2_XFERINST_BUF,
+                SCRIPT_JT2_XFERINST_BUF,
+                SCRIPT_JT2_XFERINST_BUF);
+        check_timeout(a, "step3");
 
-    // Download the PE itself (step 7-B)
-    if (debug_level > 0)
-        fprintf(stderr, "%s: download PE code\n", a->name);
-    int nloops = (nwords + 9) / 10;
-    for (i=0; i<nloops; i++, pe+=10) {          // download 10 words at a time
-        pickit_send(a, 55, CMD_CLEAR_DOWNLOAD_BUFFER,
-            CMD_DOWNLOAD_DATA, 40,
-                WORD_AS_BYTES(pe[0]),
-                WORD_AS_BYTES(pe[1]),
-                WORD_AS_BYTES(pe[2]),
-                WORD_AS_BYTES(pe[3]),
-                WORD_AS_BYTES(pe[4]),
-                WORD_AS_BYTES(pe[5]),
-                WORD_AS_BYTES(pe[6]),
-                WORD_AS_BYTES(pe[7]),
-                WORD_AS_BYTES(pe[8]),
-                WORD_AS_BYTES(pe[9]),
-            CMD_EXECUTE_SCRIPT, 10,             // execute
-                SCRIPT_JT2_XFRFASTDAT_BUF,
-                SCRIPT_JT2_XFRFASTDAT_BUF,
-                SCRIPT_JT2_XFRFASTDAT_BUF,
-                SCRIPT_JT2_XFRFASTDAT_BUF,
-                SCRIPT_JT2_XFRFASTDAT_BUF,
-                SCRIPT_JT2_XFRFASTDAT_BUF,
-                SCRIPT_JT2_XFRFASTDAT_BUF,
-                SCRIPT_JT2_XFRFASTDAT_BUF,
+        // Download the PE loader
+        int i;
+        for (i=0; i<PIC32_PE_LOADER_MX_MZ_LEN; i+=2) {
+            pickit_send(a, 25, CMD_CLEAR_DOWNLOAD_BUFFER,
+                CMD_DOWNLOAD_DATA, 16,          //------------- step 5
+                    WORD_AS_BYTES((0x3c060000   // lui a2, PE_loader_hi++
+                        | pic32_pe_loader_mx_mz[i])),
+                    WORD_AS_BYTES((0x34c60000   // ori a2, PE_loader_lo++
+                        | pic32_pe_loader_mx_mz[i+1])),
+                    WORD_AS_BYTES(0xac860000),  // sw  a2, 0(a0)
+                    WORD_AS_BYTES(0x24840004),  // addiu a0, 4
+                CMD_EXECUTE_SCRIPT, 4,          //------------- execute
+                    SCRIPT_JT2_XFERINST_BUF,
+                    SCRIPT_JT2_XFERINST_BUF,
+                    SCRIPT_JT2_XFERINST_BUF,
+                    SCRIPT_JT2_XFERINST_BUF);
+            check_timeout(a, "step5");
+        }
+
+        // Jump to PE loader
+        pickit_send(a, 42, CMD_CLEAR_DOWNLOAD_BUFFER,
+            CMD_DOWNLOAD_DATA, 16,          //----------------- step 6
+                WORD_AS_BYTES(0x3c19a000),  // lui t9, 0xa000
+                WORD_AS_BYTES(0x37390800),  // ori t9, 0x800  - t9 has a0000800
+                WORD_AS_BYTES(0x03200008),  // jr  t9
+                WORD_AS_BYTES(0x00000000),  // nop
+            CMD_EXECUTE_SCRIPT, 21,         //----------------- execute
+                SCRIPT_JT2_XFERINST_BUF,
+                SCRIPT_JT2_XFERINST_BUF,
+                SCRIPT_JT2_XFERINST_BUF,
+                SCRIPT_JT2_XFERINST_BUF,
+                SCRIPT_JT2_SENDCMD, TAP_SW_ETAP,
+                SCRIPT_JT2_SETMODE, 6, 0x1F,
+                SCRIPT_JT2_SENDCMD, ETAP_FASTDATA,
+                SCRIPT_JT2_XFRFASTDAT_LIT,
+                    0, 9, 0, 0xA0,                  // PE_ADDRESS = 0xA000_0900
+                SCRIPT_JT2_XFRFASTDAT_LIT,
+                    (unsigned char) nwords,         // PE_SIZE
+                    (unsigned char) (nwords >> 8),
+                    0, 0);
+        check_timeout(a, "step6");
+
+        // Download the PE itself (step 7-B)
+        if (debug_level > 0)
+            fprintf(stderr, "%s: download PE code\n", a->name);
+        int nloops = (nwords + 9) / 10;
+        for (i=0; i<nloops; i++, pe+=10) {          // download 10 words at a time
+            pickit_send(a, 55, CMD_CLEAR_DOWNLOAD_BUFFER,
+                CMD_DOWNLOAD_DATA, 40,
+                    WORD_AS_BYTES(pe[0]),
+                    WORD_AS_BYTES(pe[1]),
+                    WORD_AS_BYTES(pe[2]),
+                    WORD_AS_BYTES(pe[3]),
+                    WORD_AS_BYTES(pe[4]),
+                    WORD_AS_BYTES(pe[5]),
+                    WORD_AS_BYTES(pe[6]),
+                    WORD_AS_BYTES(pe[7]),
+                    WORD_AS_BYTES(pe[8]),
+                    WORD_AS_BYTES(pe[9]),
+                CMD_EXECUTE_SCRIPT, 10,             // execute
+                    SCRIPT_JT2_XFRFASTDAT_BUF,
+                    SCRIPT_JT2_XFRFASTDAT_BUF,
+                    SCRIPT_JT2_XFRFASTDAT_BUF,
+                    SCRIPT_JT2_XFRFASTDAT_BUF,
+                    SCRIPT_JT2_XFRFASTDAT_BUF,
+                    SCRIPT_JT2_XFRFASTDAT_BUF,
+                    SCRIPT_JT2_XFRFASTDAT_BUF,
+                    SCRIPT_JT2_XFRFASTDAT_BUF,
+                    SCRIPT_JT2_XFRFASTDAT_BUF,
+                    SCRIPT_JT2_XFRFASTDAT_BUF);
+            check_timeout(a, "step7");
+        }
+        mdelay(100);
+
+        // Download the PE instructions
+        pickit_send(a, 15, CMD_CLEAR_DOWNLOAD_BUFFER,
+            CMD_DOWNLOAD_DATA, 8,
+                WORD_AS_BYTES(0x00000000),         // step 8 - jump to PE
+                WORD_AS_BYTES(0xDEAD0000),
+            CMD_EXECUTE_SCRIPT, 2,                  // execute
                 SCRIPT_JT2_XFRFASTDAT_BUF,
                 SCRIPT_JT2_XFRFASTDAT_BUF);
-        check_timeout(a, "step7");
+        check_timeout(a, "step8");
+        mdelay(100);
+    
     }
-    mdelay(100);
-
-    // Download the PE instructions
-    pickit_send(a, 15, CMD_CLEAR_DOWNLOAD_BUFFER,
-        CMD_DOWNLOAD_DATA, 8,
-            WORD_AS_BYTES(0x00000000),         // step 8 - jump to PE
-            WORD_AS_BYTES(0xDEAD0000),
-        CMD_EXECUTE_SCRIPT, 2,                  // execute
-            SCRIPT_JT2_XFRFASTDAT_BUF,
-            SCRIPT_JT2_XFRFASTDAT_BUF);
-    check_timeout(a, "step8");
-    mdelay(100);
-
+    
     pickit_send(a, 11, CMD_CLEAR_UPLOAD_BUFFER,
         CMD_EXECUTE_SCRIPT, 8,
             SCRIPT_JT2_SENDCMD, ETAP_FASTDATA,

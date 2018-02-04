@@ -27,13 +27,14 @@
 extern print_func_t print_mx1;
 extern print_func_t print_mx3;
 extern print_func_t print_mz;
+extern print_func_t print_mm;
 
 extern unsigned long open_retries;
 
 /*
  * PIC32 families.
  */
-                    /*-Boot-Devcfg--Row---Print------Code--------Nwords-Version-*/
+                    /*-Boot-Devcfg--Row---Print------Code------PE-Nwords-Version-*/
 static const
 family_t family_mx1 = { "mx1",
                         3,  0x0bf0, 128,  print_mx1, pic32_pemx1, 422,  0x0301 };
@@ -43,11 +44,15 @@ family_t family_mx3 = { "mx3",
 static const
 family_t family_mz  = { "mz",
                         80, 0xffc0, 2048, print_mz,  pic32_pemz,  1052, 0x0502 };
+static const
+family_t family_mm  = { "mm",
+                         6, 0x17c0, 64,   print_mm,  pic32_pemm,  556, 0x0510 };
 /*
  * This one is a special one for the bootloader. We have no idea what we're
  * programming, so set the values to the maximum out of all the others.
  * We don't really care at the end of the day.
  */
+
 static const
 family_t family_bl  = { "bootloader",
                         80, 0,      1024, 0,         0,           0,    0      };
@@ -274,6 +279,30 @@ static variant_t pic32_tab[TABSZ] = {
     {0x7222053, "MZ2048EFG144", 2048,   &family_mz},
     {0x7227053, "MZ2048EFH144", 2048,   &family_mz},
     {0x724F053, "MZ2048EFM144", 2048,   &family_mz},
+
+    /* MM family -------------- Flash ---Family */
+    {0x7201053, "MZ0512EFE064",  512,   &family_mz},
+    {0x6B04053, "MM0016GPL020",   16,   &family_mm},
+    {0x6B0C053, "MM0032GPL020",   32,   &family_mm},
+    {0x6B14053, "MM0064GPL020",   64,   &family_mm},
+    {0x6B02053, "MM0016GPL028",   16,   &family_mm},
+    {0x6B0A053, "MM0032GPL028",   32,   &family_mm},
+    {0x6B12053, "MM0064GPL028",   64,   &family_mm},
+    {0x6B06053, "MM0016GPL036",   16,   &family_mm},
+    {0x6B0B053, "MM0032GPL036",   32,   &family_mm},
+    {0x6B16053, "MM0064GPL036",   64,   &family_mm},
+    {0x7708053, "MM0064GPM028",   64,   &family_mm},
+    {0x7710053, "MM0128GPM028",  128,   &family_mm},
+    {0x7718053, "MM0256GPM028",  256,   &family_mm},
+    {0x770A053, "MM0064GPM036",   64,   &family_mm},
+    {0x7712053, "MM0128GPM036",  128,   &family_mm},
+    {0x771A053, "MM0256GPM036",  256,   &family_mm},
+    {0x772C053, "MM0064GPM048",   64,   &family_mm},
+    {0x7734053, "MM0128GPM048",  128,   &family_mm},
+    {0x773C053, "MM0256GPM048",  256,   &family_mm},
+    {0x770E053, "MM0064GPM064",   64,   &family_mm},
+    {0x7716053, "MM0128GPM064",  128,   &family_mm},
+    {0x771E053, "MM0256GPM064",  256,   &family_mm},
 
     /* USB bootloader */
     {0xEAFB00B, "Bootloader",   0,      &family_bl},
@@ -613,6 +642,8 @@ void target_add_variant(char *name, unsigned id,
                 pic32_tab[i].family = &family_mx3;
             else if (strcmp(family, "MZ") == 0)
                 pic32_tab[i].family = &family_mz;
+            else if (strcmp(family, "MM") == 0)
+                pic32_tab[i].family = &family_mm;
             else {
                 fprintf(stderr, "%s: Unknown family=%s.\n", name, family);
             }

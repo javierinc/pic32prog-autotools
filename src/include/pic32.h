@@ -15,12 +15,26 @@
  * Programing executive.
  * Described in PIC32MX Flash Programming Specification.
  */
-#define	PIC32_PE_LOADER_LEN 42
+ 
+#define PIC32_PE_LOADER_MX_MZ_LEN 42
+#define PIC32_PE_LOADER_MM_LEN 22
 
-extern const unsigned short pic32_pe_loader[];
+/*
+ * Externs for PE Loaders.
+ * For mm series we need a new one.
+ */
+ 
+extern const unsigned short pic32_pe_loader_mx_mz[];
+extern const unsigned short pic32_pe_loader_mm[];
+
+/*
+ * Externs for PE binary data.
+ * Diferent for each device. */
+ 
 extern const unsigned pic32_pemx1[];
 extern const unsigned pic32_pemx3[];
 extern const unsigned pic32_pemz[];
+extern const unsigned pic32_pemm[];
 
 /*
  * TAP instructions (5-bit).
@@ -105,6 +119,33 @@ extern const unsigned pic32_pemz[];
 #define PE_PROGRAM_CLUSTER      0x9     /* Program N bytes */
 #define PE_GET_DEVICEID         0xA     /* Return the hardware ID of device */
 #define PE_CHANGE_CFG           0xB     /* Change PE settings */
+
+/*-------------------------------------------------------------------
+ * MM family.
+ *
+ * Config0 register, inverted.
+ */
+#define MM3_CFG0_DEBUG_MASK     0x00000003 /* Debugger enable bits */
+#define MM3_CFG0_DEBUG_DISABLED 0x00000000 /* Debugger disabled */
+#define MM3_CFG0_DEBUG_ENABLED  0x00000002 /* Debugger enabled */
+#define MM3_CFG0_JTAG_DISABLE   0x00000004 /* Disable JTAG port */
+#define MM3_CFG0_ICESEL_MASK    0x00000018 /* Debugger channel select */
+#define MM3_CFG0_ICESEL_PAIR1   0x00000000 /* Use PGC1/PGD1 */
+#define MM3_CFG0_ICESEL_PAIR2   0x00000008 /* Use PGC2/PGD2 */
+#define MM3_CFG0_ICESEL_PAIR3   0x00000010 /* Use PGC3/PGD3 */
+#define MM3_CFG0_ICESEL_PAIR4   0x00000018 /* Use PGC4/PGD4 */
+#define MM3_CFG0_PWP_MASK       0x000ff000 /* Program flash write protect */
+#define MM3_CFG0_BWP            0x01000000 /* Boot flash write protect */
+#define MM3_CFG0_CP             0x10000000 /* Code protect */
+
+/*
+ * Config1 register.
+ */
+
+//TODO
+
+
+
 
 /*-------------------------------------------------------------------
  * MX3/4/5/6/7 family.
