@@ -167,10 +167,10 @@ static void pickit_load_executive(adapter_t *adapter,
     a->use_executive = 1;
     serial_execution(a);
 
-#define WORD_AS_BYTES(w)  (unsigned char) (w), \
-                          (unsigned char) ((w) >> 8), \
-                          (unsigned char) ((w) >> 16), \
-                          (unsigned char) ((w) >> 24)
+    #define WORD_AS_BYTES(w)  (unsigned char) (w), \
+                              (unsigned char) ((w) >> 8), \
+                              (unsigned char) ((w) >> 16), \
+                              (unsigned char) ((w) >> 24)
 
     if (debug_level > 0) {
         fprintf(stderr, "%s: download PE loader\n", a->name);
@@ -178,6 +178,7 @@ static void pickit_load_executive(adapter_t *adapter,
     
     if (pe_version == 0x510) {
         
+        // Prepare ram.
         pickit_send(a, 3 + 4 + 4 + 2 + 2 + 3 + 2, 
                     CMD_CLEAR_DOWNLOAD_BUFFER,
                     CMD_DOWNLOAD_DATA,
@@ -195,7 +196,7 @@ static void pickit_load_executive(adapter_t *adapter,
                     SCRIPT_JT2_XFERINST_BUF);
                 
         check_timeout(a, "step 1");
-    
+
         // Download the PE loader
         int i;
         for (i=0; i<PIC32_PE_LOADER_MM_LEN; i+=2) {
@@ -206,7 +207,7 @@ static void pickit_load_executive(adapter_t *adapter,
                        12,
                        
                        //lui a2, <PE_loader hi++>
-                       WORD_AS_BYTES(((pic32_pe_loader_mm[i] << 16) | 0x000041A6)),
+                       WORD_AS_BYTES(((pic32_pe_loader_mm[i+1] << 16) | 0x000041A6)),
                        // ori a2, a2, <PE_loader lo++>
                        WORD_AS_BYTES(((pic32_pe_loader_mm[i] << 16) | 0x000050C6)),
                        
@@ -222,9 +223,9 @@ static void pickit_load_executive(adapter_t *adapter,
             check_timeout(a, "step 2");
             
         }
-        
+
         // Jump to PE loader
-        pickit_send(a, 3 + (4*5) + 7 + 2 + 3 + 2 + 6 +4, 
+        pickit_send(a, 3 + (4*5) + 2 + 5 + 7 + 6 + 4, 
                     CMD_CLEAR_DOWNLOAD_BUFFER,
                     CMD_DOWNLOAD_DATA, 
                     20,
@@ -236,7 +237,7 @@ static void pickit_load_executive(adapter_t *adapter,
                     WORD_AS_BYTES(0x0c000c00),
                     
                     CMD_EXECUTE_SCRIPT, 
-                    5 + 17,
+                    5 + 7 + 6 + 4,
                     SCRIPT_JT2_XFERINST_BUF,
                     SCRIPT_JT2_XFERINST_BUF,
                     SCRIPT_JT2_XFERINST_BUF,
@@ -308,7 +309,7 @@ static void pickit_load_executive(adapter_t *adapter,
         mdelay(100);
         
         // Jump to the PE
-        pickit_send(a, 3 + 8 + 2 +  2,
+        pickit_send(a, 3 + 8 + 2 + 2,
             CMD_CLEAR_DOWNLOAD_BUFFER,
             CMD_DOWNLOAD_DATA, 
             8,
@@ -467,18 +468,24 @@ static void pickit_load_executive(adapter_t *adapter,
     pickit_recv(a);
 
     unsigned version = a->reply[3] | (a->reply[4] << 8);
+    printf("%d\n",version);
+    
     if (version != 0x0007) {                    // command echo
         fprintf(stderr, "%s: bad PE reply = %04x\n", a->name, version);
         exit(-1);
     }
+    
     version = a->reply[1] | (a->reply[2] << 8);
     if (version != pe_version) {
         fprintf(stderr, "%s: bad PE version = %04x, expected %04x\n",
             a->name, version, pe_version);
         exit(-1);
     }
-    if (debug_level > 0)
+    
+    if (debug_level > 0) {
         fprintf(stderr, "%s: PE version = %04x\n", a->name, version);
+    }
+    
 }
 
 #if 0
@@ -542,30 +549,33 @@ int pe_get_crc(pickit_adapter_t *a,
 }
 #endif
 
-static void pickit_finish(pickit_adapter_t *a, int power_on)
-{
+static void pickit_finish(pickit_adapter_t *a, int power_on) {
+    
     /* Exit programming mode. */
-    pickit_send(a, 18, CMD_CLEAR_UPLOAD_BUFFER, CMD_EXECUTE_SCRIPT, 15,
-        SCRIPT_JT2_SETMODE, 5, 0x1f,
-        SCRIPT_VPP_OFF,
-        SCRIPT_MCLR_GND_ON,
-        SCRIPT_VPP_PWM_OFF,
-        SCRIPT_SET_ICSP_PINS, 6,                // set PGC high, PGD input
-        SCRIPT_SET_ICSP_PINS, 2,                // set PGC low, PGD input
-        SCRIPT_SET_ICSP_PINS, 3,                // set PGC and PGD as input
-        SCRIPT_DELAY_LONG, 10,                  // 50 msec
-        SCRIPT_BUSY_LED_OFF);
+    pickit_send(a, 18, 
+                CMD_CLEAR_UPLOAD_BUFFER, 
+                CMD_EXECUTE_SCRIPT, 
+                15,
+                
+                SCRIPT_JT2_SETMODE, 5, 0x1f,
+                SCRIPT_VPP_OFF,
+                SCRIPT_MCLR_GND_ON,
+                SCRIPT_VPP_PWM_OFF,
+                SCRIPT_SET_ICSP_PINS, 6,       // set PGC high, PGD input
+                SCRIPT_SET_ICSP_PINS, 2,       // set PGC low, PGD input
+                SCRIPT_SET_ICSP_PINS, 3,       // set PGC and PGD as input
+                SCRIPT_DELAY_LONG, 10,         // 50 msec
+                SCRIPT_BUSY_LED_OFF);
 
     if (! power_on) {
         /* Detach power from the board. */
         pickit_send(a, 4, CMD_EXECUTE_SCRIPT, 2,
-            SCRIPT_VDD_OFF,
-            SCRIPT_VDD_GND_ON);
+                    SCRIPT_VDD_OFF,
+                    SCRIPT_VDD_GND_ON);
     }
 
     /* Disable reset. */
-    pickit_send(a, 3, CMD_EXECUTE_SCRIPT, 1,
-        SCRIPT_MCLR_GND_OFF);
+    pickit_send(a, 3, CMD_EXECUTE_SCRIPT, 1,SCRIPT_MCLR_GND_OFF);
 
     /* Read board status. */
     check_timeout(a, "finish");
